@@ -25,11 +25,7 @@ SECRET_KEY = "django-insecure-9fxrxh$dlz(xo1y!!!!w&-#71*8ivw67iri7x_o9e6u!o*k(dj
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    'marisol-unalliterative-irrespectively.ngrok-free.dev'
-]
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -130,3 +126,4 @@ CORS_ALLOW_CREDENTIALS = True
 import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+CORS_ALLOW_ALL_ORIGINS = True
