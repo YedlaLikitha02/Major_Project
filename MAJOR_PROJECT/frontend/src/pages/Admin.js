@@ -132,7 +132,7 @@ useEffect(() => {
     (pos) => {
       const { latitude, longitude } = pos.coords;
 
-      axios.post("http://127.0.0.1:8000/api/update-location/", {
+     axios.post("https://major-project-9.onrender.com/api/update-location/", {
         lat: latitude,
         lng: longitude
       });
@@ -170,7 +170,7 @@ useEffect(() => {
       formData.append("alert_lng", alert.longitude);
 
       await axios.post(
-        `http://127.0.0.1:8000/api/resolve-api/${alert.id}/`,
+       `https://major-project-9.onrender.com/api/resolve-api/${alert.id}/`,
         formData
       );
 
@@ -382,7 +382,7 @@ function Table({alerts,resolveAlert,setSelectedLocation}){
     <div>
       <button
         style={{...btn, marginTop:5, background:"#22c55e"}}
-        onClick={() => window.open(`http://127.0.0.1:8000${a.proof_image}`)}
+        onClick={() => window.open(`https://major-project-9.onrender.com${a.proof_image}`)}
       >
         View Proof
       </button>
