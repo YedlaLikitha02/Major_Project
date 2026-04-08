@@ -26,7 +26,7 @@ export default function PoliceDashboard(){
   const lastAlertRef = useRef(null);
 
   const loadAlerts = () => {
-  axios.get("https://major-project-9.onrender.com/api/police-alerts/")
+  axios.get("https://major-project-9.onrender.com/api/admin-alerts/")
     .then(res => {
 
       if (res.data.length > 0) {
