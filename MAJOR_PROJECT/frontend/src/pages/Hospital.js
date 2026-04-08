@@ -26,7 +26,7 @@ export default function HospitalDashboard(){
   const lastAlertRef = useRef(null);
 
   const loadAlerts = () => {
- axios.get("https://major-project-10.onrender.com/hospital-alerts/")
+axios.get("https://major-project-9.onrender.com/api/hospital-alerts/")
     .then(res => {
 
       if (res.data.length > 0) {
