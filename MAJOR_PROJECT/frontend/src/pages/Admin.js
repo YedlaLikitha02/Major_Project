@@ -27,7 +27,7 @@ export default function Admin(){
   const [pulse,setPulse]=useState(80);
 
   const loadAlerts = () => {
-  axios.get("https://major-project-10.onrender.com/admin-alerts/")
+  axios.get("https://major-project-9.onrender.com/api/admin-alerts/")
     .then(res => {
 
       if (res.data.length > 0) {
