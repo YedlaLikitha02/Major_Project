@@ -1,35 +1,37 @@
 import { useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 export default function Login(){
 
   const [username,setUsername]=useState("");
   const [password,setPassword]=useState("");
+  const navigate = useNavigate();
 
   const login = async ()=>{
     try{
 
-        const res = await axios.post(
-            "https://major-project-9.onrender.com/api/login/",
-            { username, password },
-            { withCredentials: true }   // IMPORTANT
-          );
+      const res = await axios.post(
+        "https://major-project-9.onrender.com/api/login/",
+        { username, password },
+        { withCredentials: true }
+      );
 
       if(res.data.status==="success"){
 
-        const role=res.data.role;
+        const role = res.data.role;
 
-        if(role==="police") window.location="/police";
-        else if(role==="hospital") window.location="/hospital";
-        else window.location="/admin";
-      }
-      else{
+        if(role==="police") navigate("/police");
+        else if(role==="hospital") navigate("/hospital");
+        else navigate("/admin");
+
+      } else {
         alert("Invalid credentials");
       }
 
     }catch(err){
-      console.log(err);
-      alert("Server not reachable or wrong URL");
+      console.log("ERROR:", err);
+      alert("Login failed. Check console.");
     }
   };
 
