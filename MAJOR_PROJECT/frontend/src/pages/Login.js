@@ -10,7 +10,7 @@ export default function Login(){
     try{
 
         const res = await axios.post(
-            "http://127.0.0.1:8000/api/login/",
+            "https://major-project-9.onrender.com",
             { username, password },
             { withCredentials: true }   // IMPORTANT
           );
