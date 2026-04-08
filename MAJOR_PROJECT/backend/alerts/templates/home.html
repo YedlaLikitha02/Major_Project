@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Emergency Response System</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .box {
+            text-align: center;
+            background: white;
+            padding: 50px;
+            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        button {
+            display: block;
+            width: 220px;
+            margin: 12px auto;
+            padding: 14px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .police { background: #1e3a8a; }
+        .hospital { background: #b91c1c; }
+        .admin { background: #111827; }
+
+        button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+    <h1>🚨 Emergency Response Portal</h1>
+
+    <a href="/police-dashboard/"><button class="police">Police Dashboard</button></a>
+    <a href="/hospital-dashboard/"><button class="hospital">Hospital Dashboard</button></a>
+    <a href="/admin-dashboard/"><button class="admin">Admin Dashboard</button></a>
+
+</div>
+
+</body>
+</html>

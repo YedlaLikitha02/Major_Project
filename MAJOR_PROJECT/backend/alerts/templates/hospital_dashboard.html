@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hospital Emergency Dashboard</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background: #f4f6f9;
+        }
+
+        header {
+            background: #1e3a8a;
+            color: white;
+            padding: 18px 40px;
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .container {
+            padding: 30px 40px;
+        }
+
+        #map {
+            height: 420px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        th {
+            background: #111827;
+            color: white;
+        }
+
+        .active {
+            color: red;
+            font-weight: bold;
+        }
+
+        .resolved {
+            color: green;
+            font-weight: bold;
+        }
+
+        button {
+            background: #2563eb;
+            border: none;
+            padding: 8px 14px;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        input[type="file"]{
+            margin-bottom:6px;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    🏥 Hospital Emergency Dashboard
+</header>
+
+<div class="container">
+
+    <!-- MAP -->
+    <div class="card">
+        <h3>Live Emergency Map</h3>
+        <div id="map"></div>
+    </div>
+
+    <!-- ACTIVE ALERTS -->
+    <div class="card">
+        <h3>Active Alerts</h3>
+
+        <table>
+            <tr>
+                <th>Device</th>
+                <th>Location</th>
+                <th>Message</th>
+                <th>Status</th>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Action</th>
+            </tr>
+
+            {% for alert in alerts %}
+                {% if alert.status == "active" %}
+                <tr>
+                    <td>{{ alert.device_id }}</td>
+                    <td>{{ alert.latitude }}, {{ alert.longitude }}</td>
+                    <td>{{ alert.message }}</td>
+                    <td class="active">{{ alert.status }}</td>
+                    <td>{{ alert.timestamp }}</td>
+                    <td>{{ alert.emergency_type }}</td>
+
+                    <td>
+                    <form id="resolveForm{{alert.id}}" enctype="multipart/form-data">
+
+                        <!-- 📸 Selfie -->
+                        <input type="file" name="proof" accept="image/*" capture="user" required>
+
+                        <!-- 📍 GPS -->
+                        <input type="hidden" name="latitude" id="lat{{alert.id}}">
+                        <input type="hidden" name="longitude" id="lon{{alert.id}}">
+
+                        <button type="button" onclick="resolveAlert({{alert.id}})">
+                        Resolve
+                        </button>
+
+                    </form>
+                    </td>
+
+                </tr>
+                {% endif %}
+            {% endfor %}
+        </table>
+    </div>
+
+    <!-- RESOLVED ALERTS -->
+    <div class="card">
+        <h3>Resolved Alerts History</h3>
+
+        <table>
+            <tr>
+                <th>Device</th>
+                <th>Location</th>
+                <th>Message</th>
+                <th>Status</th>
+                <th>Time</th>
+                <th>Type</th>
+                <th>Proof</th>
+            </tr>
+
+            {% for alert in alerts %}
+                {% if alert.status == "resolved" %}
+                <tr>
+                    <td>{{ alert.device_id }}</td>
+                    <td>{{ alert.latitude }}, {{ alert.longitude }}</td>
+                    <td>{{ alert.message }}</td>
+                    <td class="resolved">Resolved</td>
+                    <td>{{ alert.timestamp }}</td>
+                    <td>{{ alert.emergency_type }}</td>
+
+                    <td>
+                    {% if alert.proof_image %}
+                        <a href="{{alert.proof_image.url}}" target="_blank">View Proof</a>
+                    {% else %}
+                        -
+                    {% endif %}
+                    </td>
+
+                </tr>
+                {% endif %}
+            {% endfor %}
+        </table>
+    </div>
+
+</div>
+
+<script>
+
+/* 🗺 MAP */
+var map = L.map('map').setView([17.38, 78.48], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+}).addTo(map);
+
+{% for alert in alerts %}
+{% if alert.status == "active" %}
+L.marker([{{ alert.latitude }}, {{ alert.longitude }}])
+.addTo(map)
+.bindPopup("<b>{{ alert.device_id }}</b><br>{{ alert.message }}");
+{% endif %}
+{% endfor %}
+
+
+/* 🔐 CSRF TOKEN */
+function getCSRFToken(){
+    let name = 'csrftoken';
+    let cookies = document.cookie.split(';');
+
+    for(let c of cookies){
+        if(c.trim().startsWith(name)){
+            return c.split('=')[1];
+        }
+    }
+}
+
+
+/* 🚨 RESOLVE FUNCTION */
+function resolveAlert(alertId){
+
+    let form = document.getElementById("resolveForm"+alertId);
+    let fileInput = form.querySelector('input[type="file"]');
+
+    // 📸 Check selfie
+    if(fileInput.files.length === 0){
+        alert("⚠ Please upload selfie proof!");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+
+        function(position){
+
+            let lat = position.coords.latitude;
+            let lon = position.coords.longitude;
+
+            document.getElementById("lat"+alertId).value = lat;
+            document.getElementById("lon"+alertId).value = lon;
+
+            let formData = new FormData(form);
+
+            fetch("/api/resolve-api/"+alertId+"/",{
+                method:"POST",
+                body:formData,
+                headers:{
+                    "X-CSRFToken": getCSRFToken()
+                }
+            })
+            .then(res=>res.json())
+            .then(data=>{
+
+                if(data.status === "success"){
+                    alert("✅ Alert resolved successfully!");
+                    location.reload();
+                }else{
+                    alert("❌ " + data.message);
+                }
+
+            })
+            .catch(()=>{
+                alert("❌ Server error!");
+            });
+
+        },
+
+        function(){
+            alert("⚠ Please enable GPS!");
+        }
+
+    );
+}
+
+</script>
+
+</body>
+</html>
