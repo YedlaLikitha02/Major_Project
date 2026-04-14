@@ -25,39 +25,41 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 @permission_classes([AllowAny])
 def send_alert(request):
 
-    print("📥 DATA RECEIVED:", request.data)   # DEBUG
+    print("📥 DATA RECEIVED:", request.data)
 
     serializer = AlertSerializer(data=request.data)
 
     if serializer.is_valid():
         alert = serializer.save()
 
-        emergency = (alert.emergency_type or "general").lower()
+        mode = request.data.get("mode", "single")  # single or double
 
-        # 🔥 NEW: MODE FROM FLUTTER (single / double tap)
-        mode = request.data.get("mode", "single")  # default single tap
+        # ================= SOS ROUTING LOGIC =================
 
-        # ================= EXISTING SMART ROUTING (UNCHANGED) =================
-        if emergency == "medical":
-            alert.route_info = "Hospital and ambulance notified"
+        if mode == "single":
+            # 🔴 1 CLICK → Police + Admin
+            send_to_police(alert)
+            send_to_admin(alert)
+            send_to_dashboard(alert)
 
-        elif emergency in ["attack", "robbery"]:
-            alert.route_info = "Police notified"
+            alert.route_info = "SINGLE SOS → Police + Admin + Dashboard"
 
-        elif emergency == "accident":
-            alert.route_info = "Police and ambulance notified"
+        elif mode == "double":
+            # 🔴 2 CLICK → Police + Hospital + Admin
+            send_to_police(alert)
+            send_to_hospital(alert)
+            send_to_admin(alert)
+            send_to_dashboard(alert)
+
+            alert.route_info = "DOUBLE SOS → Police + Hospital + Admin + Dashboard"
 
         else:
-            alert.route_info = "General SOS - all responders notified"
+            # fallback safety
+            send_to_police(alert)
+            send_to_admin(alert)
+            send_to_dashboard(alert)
 
-        # ================= 🔥 NEW SOS LOGIC (ADDED) =================
-        # SINGLE TAP → Police + Dashboard (default behavior)
-        if mode == "single":
-            alert.route_info += " | Mode: SINGLE (Police + Dashboard)"
-
-        # DOUBLE TAP → Police + Admin + Hospital + Dashboard
-        elif mode == "double":
-            alert.route_info += " | Mode: DOUBLE (ALL AGENCIES)"
+            alert.route_info = "DEFAULT MODE → Police + Admin + Dashboard"
 
         alert.save()
 
@@ -68,19 +70,16 @@ def send_alert(request):
                 "device_id": alert.device_id,
                 "latitude": alert.latitude,
                 "longitude": alert.longitude,
-                "emergency_type": alert.emergency_type,
-                "route_info": alert.route_info,
-                "mode": mode
+                "mode": mode,
+                "route_info": alert.route_info
             }
         })
 
     else:
-        print("❌ SERIALIZER ERRORS:", serializer.errors)
         return Response({
             "status": "error",
             "errors": serializer.errors
         }, status=400)
-
 
 # ================= POLICE DASHBOARD =================
 @login_required
