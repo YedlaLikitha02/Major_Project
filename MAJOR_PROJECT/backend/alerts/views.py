@@ -19,7 +19,7 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         return
 
 
-# ================= SEND ALERT API (FIXED) =================
+# ================= SEND ALERT API (UPDATED WITH MODE LOGIC) =================
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
@@ -34,7 +34,10 @@ def send_alert(request):
 
         emergency = (alert.emergency_type or "general").lower()
 
-        # Smart routing
+        # 🔥 NEW: MODE FROM FLUTTER (single / double tap)
+        mode = request.data.get("mode", "single")  # default single tap
+
+        # ================= EXISTING SMART ROUTING (UNCHANGED) =================
         if emergency == "medical":
             alert.route_info = "Hospital and ambulance notified"
 
@@ -47,6 +50,15 @@ def send_alert(request):
         else:
             alert.route_info = "General SOS - all responders notified"
 
+        # ================= 🔥 NEW SOS LOGIC (ADDED) =================
+        # SINGLE TAP → Police + Dashboard (default behavior)
+        if mode == "single":
+            alert.route_info += " | Mode: SINGLE (Police + Dashboard)"
+
+        # DOUBLE TAP → Police + Admin + Hospital + Dashboard
+        elif mode == "double":
+            alert.route_info += " | Mode: DOUBLE (ALL AGENCIES)"
+
         alert.save()
 
         return Response({
@@ -57,12 +69,13 @@ def send_alert(request):
                 "latitude": alert.latitude,
                 "longitude": alert.longitude,
                 "emergency_type": alert.emergency_type,
-                "route_info": alert.route_info
+                "route_info": alert.route_info,
+                "mode": mode
             }
         })
 
     else:
-        print("❌ SERIALIZER ERRORS:", serializer.errors)  # 🔥 VERY IMPORTANT
+        print("❌ SERIALIZER ERRORS:", serializer.errors)
         return Response({
             "status": "error",
             "errors": serializer.errors
