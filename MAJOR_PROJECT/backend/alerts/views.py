@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication
 
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login
 from django.utils import timezone
@@ -19,7 +19,7 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         return
 
 
-# ================= SEND ALERT API (UPDATED WITH MODE LOGIC) =================
+# ================= SEND ALERT API =================
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
@@ -29,59 +29,82 @@ def send_alert(request):
 
     serializer = AlertSerializer(data=request.data)
 
-    if serializer.is_valid():
-        alert = serializer.save()
-
-        mode = request.data.get("mode", "single")  # single or double
-
-        # ================= SOS ROUTING LOGIC =================
-
-        if mode == "single":
-            # 🔴 1 CLICK → Police + Admin
-            send_to_police(alert)
-            send_to_admin(alert)
-            send_to_dashboard(alert)
-
-            alert.route_info = "SINGLE SOS → Police + Admin + Dashboard"
-
-        elif mode == "double":
-            # 🔴 2 CLICK → Police + Hospital + Admin
-            send_to_police(alert)
-            send_to_hospital(alert)
-            send_to_admin(alert)
-            send_to_dashboard(alert)
-
-            alert.route_info = "DOUBLE SOS → Police + Hospital + Admin + Dashboard"
-
-        else:
-            # fallback safety
-            send_to_police(alert)
-            send_to_admin(alert)
-            send_to_dashboard(alert)
-
-            alert.route_info = "DEFAULT MODE → Police + Admin + Dashboard"
-
-        alert.save()
-
-        return Response({
-            "status": "success",
-            "message": "Alert received",
-            "data": {
-                "device_id": alert.device_id,
-                "latitude": alert.latitude,
-                "longitude": alert.longitude,
-                "mode": mode,
-                "route_info": alert.route_info
-            }
-        })
-
-    else:
+    if not serializer.is_valid():
         return Response({
             "status": "error",
             "errors": serializer.errors
         }, status=400)
 
-# ================= POLICE DASHBOARD =================
+    alert = serializer.save()
+
+    # ================= MODE LOGIC =================
+    mode = request.data.get("mode", "single")  # single / double
+
+    # default roles safety
+    roles = request.data.get("notify_roles")
+
+    # If frontend does NOT send roles → use mode logic
+    if not roles:
+
+        if mode == "single":
+            roles = ["police", "admin", "dashboard"]
+
+        elif mode == "double":
+            roles = ["police", "hospital", "admin", "dashboard"]
+
+        else:
+            roles = ["police", "admin", "dashboard"]
+
+    # ================= ROUTING =================
+    if "police" in roles:
+        send_to_police(alert)
+
+    if "hospital" in roles:
+        send_to_hospital(alert)
+
+    if "admin" in roles:
+        send_to_admin(alert)
+
+    if "dashboard" in roles:
+        send_to_dashboard(alert)
+
+    alert.route_info = f"MODE: {mode} | ROLES: {roles}"
+    alert.save()
+
+    return Response({
+        "status": "success",
+        "message": "Alert received",
+        "data": {
+            "device_id": alert.device_id,
+            "latitude": alert.latitude,
+            "longitude": alert.longitude,
+            "mode": mode,
+            "roles_sent": roles,
+            "route_info": alert.route_info
+        }
+    })
+
+
+# ================= PLACEHOLDER FUNCTIONS =================
+# (Replace these with real Firebase/email/SMS integrations later)
+
+def send_to_police(alert):
+    print("📢 Sent to POLICE dashboard")
+
+
+def send_to_hospital(alert):
+    print("🏥 Sent to HOSPITAL dashboard")
+
+
+def send_to_admin(alert):
+    print("👮 Sent to ADMIN dashboard")
+
+
+def send_to_dashboard(alert):
+    print("📊 Sent to MAIN dashboard")
+
+
+# ================= DASHBOARDS =================
 @login_required
 def police_dashboard(request):
     alerts = Alert.objects.filter(
@@ -91,7 +114,6 @@ def police_dashboard(request):
     return render(request, "police_dashboard.html", {"alerts": alerts})
 
 
-# ================= HOSPITAL DASHBOARD =================
 @login_required
 def hospital_dashboard(request):
     alerts = Alert.objects.filter(
@@ -101,7 +123,6 @@ def hospital_dashboard(request):
     return render(request, "hospital_dashboard.html", {"alerts": alerts})
 
 
-# ================= ADMIN DASHBOARD =================
 @login_required
 def admin_dashboard(request):
     alerts = Alert.objects.all().order_by("-timestamp")
@@ -115,52 +136,10 @@ def resolve_alert(request, alert_id):
     alert.status = "resolved"
     alert.resolved_at = timezone.now()
     alert.save()
-
-    user = request.user
-    groups = [g.name.lower() for g in user.groups.all()]
-
-    if "police" in groups:
-        return redirect('/api/police/')
-    elif "hospital" in groups:
-        return redirect('/api/hospital/')
-    else:
-        return redirect('/api/admin-dashboard/')
+    return Response({"status": "resolved"})
 
 
-# ================= HOME =================
-def home(request):
-    return render(request, "home.html")
-
-
-# ================= APIs =================
-@api_view(['GET'])
-def police_alerts_api(request):
-    alerts = Alert.objects.filter(
-        emergency_type__in=["attack", "robbery", "accident"]
-    ).order_by("-timestamp")
-
-    serializer = AlertSerializer(alerts, many=True)
-    return Response(serializer.data)
-
-
-@api_view(['GET'])
-def hospital_alerts_api(request):
-    alerts = Alert.objects.filter(
-        emergency_type__in=["medical", "accident"]
-    ).order_by("-timestamp")
-
-    serializer = AlertSerializer(alerts, many=True)
-    return Response(serializer.data)
-
-
-@api_view(['GET'])
-def admin_alerts_api(request):
-    alerts = Alert.objects.all().order_by("-timestamp")
-    serializer = AlertSerializer(alerts, many=True)
-    return Response(serializer.data)
-
-
-# ================= LOGIN API =================
+# ================= LOGIN =================
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
@@ -172,83 +151,6 @@ def login_api(request):
 
     if user:
         login(request, user)
-
-        groups = [g.name.lower() for g in user.groups.all()]
-
-        if "police" in groups:
-            role = "police"
-        elif "hospital" in groups:
-            role = "hospital"
-        else:
-            role = "admin"
-
-        return Response({"status": "success", "role": role})
+        return Response({"status": "success"})
 
     return Response({"status": "error", "message": "Invalid credentials"})
-
-
-# ================= RESOLVE ALERT API =================
-@api_view(['POST'])
-def resolve_alert_api(request, alert_id):
-    try:
-        alert = Alert.objects.get(id=alert_id)
-
-        photo = request.FILES.get("photo")
-
-        user_lat = float(request.POST.get("lat"))
-        user_lng = float(request.POST.get("lng"))
-
-        alert_lat = float(request.POST.get("alert_lat"))
-        alert_lng = float(request.POST.get("alert_lng"))
-
-        distance = geodesic(
-            (user_lat, user_lng),
-            (alert_lat, alert_lng)
-        ).meters
-
-        if distance > 200:
-            return Response({
-                "status": "error",
-                "message": f"Too far ({int(distance)} meters)"
-            }, status=400)
-
-        alert.status = "resolved"
-
-        if photo:
-            alert.proof_image = photo
-
-        alert.save()
-
-        return Response({
-            "status": "success",
-            "distance": distance
-        })
-
-    except Alert.DoesNotExist:
-        return Response({"status": "error"}, status=404)
-
-    except Exception as e:
-        return Response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
-
-
-# ================= LIVE LOCATION =================
-user_locations = {}
-
-@api_view(['POST'])
-def update_location(request):
-    user = request.user.username if request.user.is_authenticated else "anonymous"
-
-    lat = request.data.get("lat")
-    lng = request.data.get("lng")
-
-    user_locations[user] = {
-        "lat": lat,
-        "lng": lng
-    }
-
-    print("📍 LIVE LOCATION:", user, lat, lng)
-
-    return Response({"status": "updated"})
