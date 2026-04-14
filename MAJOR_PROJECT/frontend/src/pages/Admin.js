@@ -5,9 +5,13 @@ import "leaflet/dist/leaflet.css";
 
 function ChangeMapView({coords}){
   const map = useMap();
+
   useEffect(()=>{
-    if(coords){ map.setView(coords,15); }
+    if(coords){
+      map.setView(coords,15);
+    }
   },[coords,map]);
+
   return null;
 }
 
@@ -19,163 +23,199 @@ export default function Admin(){
   const [selectedLocation,setSelectedLocation]=useState(null);
   const [playSound, setPlaySound] = useState(false);
   const lastAlertRef = useRef(null);
+
   const [pulse,setPulse]=useState(80);
 
   const loadAlerts = () => {
-    axios.get("https://major-project-9.onrender.com/api/admin-alerts/")
-      .then(res => {
-        if (res.data.length > 0) {
-          const latestId = res.data[0].id;
-          if (lastAlertRef.current !== null && latestId !== lastAlertRef.current) {
-            alert("🚨 New Emergency Alert!");
-            setPlaySound(true);
-          }
-          lastAlertRef.current = latestId;
+  axios.get("https://major-project-10.onrender.com/api/admin-alerts/")
+    .then(res => {
+
+      if (res.data.length > 0) {
+        const latestId = res.data[0].id;
+
+        if (
+          lastAlertRef.current !== null &&
+          latestId !== lastAlertRef.current
+        ) {
+          alert("🚨 New Emergency Alert!");
+          setPlaySound(true);
         }
-        setAlerts(res.data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError("Failed to load alerts");
-        setLoading(false);
-      });
-  };
 
-  const getCurrentLocation = () => {
-    return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        (err) => reject(err)
-      );
+        lastAlertRef.current = latestId;
+      }
+
+      setAlerts(res.data);
+      setLoading(false);
+    })
+    .catch(() => {
+      setError("Failed to load alerts");
+      setLoading(false);
     });
-  };
+};
+  const getCurrentLocation = () => {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        });
+      },
+      (err) => reject(err)
+    );
+  });
+};
 
-  useEffect(()=>{ loadAlerts(); },[]);
+  /* FIRST LOAD */
+  useEffect(()=>{ 
+    loadAlerts(); 
+  },[]);
 
+  /* AUTO REFRESH EVERY 1 MINUTE */
   useEffect(()=>{
-    const interval=setInterval(()=>{ loadAlerts(); },10000);
+    const interval=setInterval(()=>{
+      loadAlerts();
+    },10000);   // 10000 ms = 10 sec
+
     return ()=>clearInterval(interval);
   },[]);
 
+  /* BLINKING MAP EFFECT */
   useEffect(()=>{
     const interval=setInterval(()=>{
       setPulse(prev => prev===80 ? 140 : 80);
     },700);
+
     return ()=>clearInterval(interval);
   },[]);
-
   useEffect(() => {
-    const unlock = () => {
-      const audio = document.getElementById("alertSound");
-      if (audio) {
-        audio.muted = true;
-        audio.play().then(() => {
-          audio.pause(); audio.currentTime = 0; audio.muted = false;
-        }).catch(() => {});
-      }
-    };
-    document.addEventListener("click", unlock, { once: true });
-    return () => document.removeEventListener("click", unlock);
-  }, []);
-
-  useEffect(() => {
-    if (playSound) {
-      const audio = document.getElementById("alertSound");
-      if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(() => {
-          audio.muted = true;
-          audio.play().then(() => { audio.muted = false; });
-        });
-      }
-      setPlaySound(false);
-    }
-  }, [playSound]);
-
-  useEffect(() => {
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        axios.post("https://major-project-9.onrender.com/api/update-location/", {
-          lat: latitude, lng: longitude
-        });
-      },
-      (err) => console.log(err),
-      { enableHighAccuracy: true }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
-
-  const resolveAlert = async (alert) => {
-    try {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.capture = "environment";
-
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) { alert("Photo is required!"); return; }
-
-        const location = await getCurrentLocation();
-        const formData = new FormData();
-        formData.append("photo", file);
-        formData.append("lat", location.lat);
-        formData.append("lng", location.lng);
-        formData.append("alert_lat", alert.latitude);
-        formData.append("alert_lng", alert.longitude);
-
-        await axios.post(
-          `https://major-project-9.onrender.com/api/resolve-api/${alert.id}/`,
-          formData
-        );
-        loadAlerts();
-      };
-      input.click();
-    } catch (err) {
-      alert("Error resolving alert");
+  const unlock = () => {
+    const audio = document.getElementById("alertSound");
+    if (audio) {
+      audio.muted = true;
+      audio.play()
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.muted = false;
+        })
+        .catch(() => {});
     }
   };
 
+  document.addEventListener("click", unlock, { once: true });
+
+  return () => document.removeEventListener("click", unlock);
+}, []);
+
+useEffect(() => {
+  if (playSound) {
+    const audio = document.getElementById("alertSound");
+
+    if (audio) {
+      audio.currentTime = 0;
+
+      audio.play().catch(() => {
+        audio.muted = true;
+        audio.play().then(() => {
+          audio.muted = false;
+        });
+      });
+    }
+
+    setPlaySound(false);
+  }
+}, [playSound]);
+
+useEffect(() => {
+  const watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+
+      axios.post("http://127.0.0.1:8000/api/update-location/", {
+        lat: latitude,
+        lng: longitude
+      });
+    },
+    (err) => console.log(err),
+    { enableHighAccuracy: true }
+  );
+
+  return () => navigator.geolocation.clearWatch(watchId);
+}, []);
+
+  const resolveAlert = async (alert) => {
+  try {
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment";
+
+    input.onchange = async (e) => {
+
+      const file = e.target.files[0];
+      if (!file) {
+        alert("Photo is required!");
+        return;
+      }
+
+      const location = await getCurrentLocation();
+
+      const formData = new FormData();
+      formData.append("photo", file);
+      formData.append("lat", location.lat);
+      formData.append("lng", location.lng);
+      formData.append("alert_lat", alert.latitude);
+      formData.append("alert_lng", alert.longitude);
+
+      await axios.post(
+        `http://127.0.0.1:8000/api/resolve-api/${alert.id}/`,
+        formData
+      );
+
+      loadAlerts();
+    };
+
+    input.click();
+
+  } catch (err) {
+    console.log("Resolve error:", err);
+    alert("Error resolving alert");
+  }
+};
+
+  /* ALERT FILTERS */
   const active=alerts.filter(a=>a.status!=="resolved");
   const resolved=alerts.filter(a=>a.status==="resolved");
 
+  /* EXPORT CSV */
   const exportCSV=()=>{
     const rows=[
-      ["Device","Latitude","Longitude","Message","SOS Type","Severity","Status","Time"],
+      ["Device","Latitude","Longitude","Message","Status","Time"],
       ...alerts.map(a=>[
-        a.device_id, a.latitude, a.longitude, a.message,
-        a.emergency_type, a.severity, a.status, new Date(a.timestamp).toLocaleString()
+        a.device_id,
+        a.latitude,
+        a.longitude,
+        a.message,
+        a.status,
+        new Date(a.timestamp).toLocaleString()
       ])
-    ];
-    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e=>e.join(",")).join("\n");
+    ]
+
+    const csvContent=
+      "data:text/csv;charset=utf-8," +
+      rows.map(e=>e.join(",")).join("\n")
+
+    const encodedUri=encodeURI(csvContent);
     const link=document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
+
+    link.setAttribute("href",encodedUri);
     link.setAttribute("download","alerts_report.csv");
+
     document.body.appendChild(link);
     link.click();
-  };
-
-  // ✅ SOS Type badge
-  const sosBadge = (type) => {
-    const styles = {
-      sos_single: { background:"#1d4ed8", label:"🚔 Single SOS" },
-      sos_double: { background:"#b91c1c", label:"🚨 Double SOS" },
-      medical:    { background:"#0369a1", label:"🏥 Medical" },
-      accident:   { background:"#92400e", label:"🚗 Accident" },
-      attack:     { background:"#7c2d12", label:"⚠️ Attack" },
-      robbery:    { background:"#4c1d95", label:"🔫 Robbery" },
-    };
-    const s = styles[type] || { background:"#374151", label: type || "general" };
-    return (
-      <span style={{
-        padding:"3px 8px", borderRadius:5,
-        background: s.background, color:"white", fontSize:11
-      }}>
-        {s.label}
-      </span>
-    );
-  };
+  }
 
   if(loading) return <div style={page}>Loading alerts...</div>;
   if(error) return <div style={page}>{error}</div>;
@@ -183,47 +223,48 @@ export default function Admin(){
   return(
     <div style={page}>
       <audio id="alertSound" preload="auto">
-        <source src="/alert.mp3" type="audio/mpeg" />
-      </audio>
+  <source src="/alert.mp3" type="audio/mpeg" />
+</audio>
 
-      <h1 style={{color:"#f97316"}}>⚙️ Admin Control Center</h1>
+      {/* HEADER */}
+      <h1 style={{color:"#f97316"}}>
+        ⚙️ Admin Control Center
+      </h1>
 
+      {/* STATS CARDS */}
       <div style={statsContainer}>
+
         <div style={card}>
           <h3>Total Alerts</h3>
           <p style={number}>{alerts.length}</p>
         </div>
+
         <div style={card}>
           <h3>Active Alerts</h3>
           <p style={{...number,color:"#ef4444"}}>{active.length}</p>
         </div>
+
         <div style={card}>
-          <h3>Resolved</h3>
+          <h3>Resolved Alerts</h3>
           <p style={{...number,color:"#22c55e"}}>{resolved.length}</p>
         </div>
-        {/* ✅ SOS breakdown cards */}
-        <div style={{...card, borderLeft:"3px solid #1d4ed8"}}>
-          <h3>Single SOS</h3>
-          <p style={{...number,color:"#60a5fa"}}>
-            {alerts.filter(a=>a.emergency_type==="sos_single").length}
-          </p>
-        </div>
-        <div style={{...card, borderLeft:"3px solid #b91c1c"}}>
-          <h3>Double SOS</h3>
-          <p style={{...number,color:"#f87171"}}>
-            {alerts.filter(a=>a.emergency_type==="sos_double").length}
-          </p>
-        </div>
-        <button style={exportBtn} onClick={exportCSV}>Export Report</button>
+
+        <button style={exportBtn} onClick={exportCSV}>
+          Export Report
+        </button>
+
       </div>
 
+      {/* MAP */}
       <MapContainer
         center={[17.38,78.48]}
         zoom={11}
         style={{height:350,marginTop:20,borderRadius:12,overflow:"hidden"}}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+
         <ChangeMapView coords={selectedLocation}/>
+
         {active.map(a=>(
           a.latitude && a.longitude && (
             <Circle
@@ -231,44 +272,56 @@ export default function Admin(){
               center={[a.latitude,a.longitude]}
               radius={pulse}
               pathOptions={{
-                color: a.emergency_type==="sos_double" ? "#b91c1c" : "red",
-                fillColor: a.emergency_type==="sos_double" ? "#b91c1c" : "red",
+                color:"red",
+                fillColor:"red",
                 fillOpacity:0.5
               }}
             >
               <Popup>
                 <strong>{a.message}</strong><br/>
-                Type: {a.emergency_type}<br/>
                 Status: {a.status}
               </Popup>
             </Circle>
           )
         ))}
+
         {selectedLocation && (
-          <Circle center={selectedLocation} radius={pulse}
-            pathOptions={{color:"#f97316",fillColor:"#f97316",fillOpacity:0.5}}>
+          <Circle
+            center={selectedLocation}
+            radius={pulse}
+            pathOptions={{
+              color:"#f97316",
+              fillColor:"#f97316",
+              fillOpacity:0.5
+            }}
+          >
             <Popup>Selected Alert Location</Popup>
           </Circle>
         )}
+
       </MapContainer>
 
       <h2 style={{marginTop:30}}>Active Alerts</h2>
-      <Table alerts={active} resolveAlert={resolveAlert}
-        setSelectedLocation={setSelectedLocation} sosBadge={sosBadge}/>
+      <Table alerts={active} resolveAlert={resolveAlert} setSelectedLocation={setSelectedLocation}/>
 
       <h2 style={{marginTop:30}}>Resolved Alerts History</h2>
-      <Table alerts={resolved} setSelectedLocation={setSelectedLocation} sosBadge={sosBadge}/>
+      <Table alerts={resolved} setSelectedLocation={setSelectedLocation}/>
+
     </div>
-  );
+  )
 }
 
-function Table({alerts,resolveAlert,setSelectedLocation,sosBadge}){
+/* TABLE COMPONENT */
+
+function Table({alerts,resolveAlert,setSelectedLocation}){
+
   const navigateToLocation=(lat,lon)=>{
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`,"_blank");
-  };
+    const url=`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+    window.open(url,"_blank");
+  }
 
   if(!alerts.length){
-    return <p style={{marginTop:10,color:"white"}}>No alerts found</p>;
+    return <p style={{marginTop:10,color:"white"}}>No alerts found</p>
   }
 
   return(
@@ -276,7 +329,6 @@ function Table({alerts,resolveAlert,setSelectedLocation,sosBadge}){
       <thead>
         <tr>
           <th style={th}>Device</th>
-          <th style={th}>SOS Type</th>
           <th style={th}>Location</th>
           <th style={th}>Message</th>
           <th style={th}>Status</th>
@@ -284,73 +336,173 @@ function Table({alerts,resolveAlert,setSelectedLocation,sosBadge}){
           {resolveAlert && <th style={th}>Action</th>}
         </tr>
       </thead>
+
       <tbody>
       {alerts.map(a=>(
-        <tr key={a.id} style={
-          a.status!=="resolved"
-            ? a.emergency_type==="sos_double"
-              ? criticalBlinkRow
-              : blinkingRow
-            : {}
-        }>
+        <tr key={a.id} style={a.status!=="resolved"?blinkingRow:{}}>
+
           <td style={td}>{a.device_id}</td>
-          <td style={td}>{sosBadge(a.emergency_type)}</td>
+
           <td style={td}>
             {a.latitude},{a.longitude}<br/>
-            <button style={navigateBtn} onClick={()=>navigateToLocation(a.latitude,a.longitude)}>
+
+            <button
+              style={navigateBtn}
+              onClick={()=>navigateToLocation(a.latitude,a.longitude)}
+            >
               Navigate
             </button>
-            <button style={viewBtn} onClick={()=>setSelectedLocation([a.latitude,a.longitude])}>
+
+            <button
+              style={viewBtn}
+              onClick={()=>setSelectedLocation([a.latitude,a.longitude])}
+            >
               View
             </button>
           </td>
+
           <td style={td}>{a.message}</td>
+
           <td style={td}>
             <span style={{
-              padding:"4px 8px", borderRadius:6,
+              padding:"4px 8px",
+              borderRadius:6,
               background:a.status==="resolved"?"#16a34a":"#dc2626",
-              color:"white", fontSize:12
+              color:"white",
+              fontSize:12
             }}>
               {a.status}
             </span>
           </td>
+
           <td style={td}>
-            {new Date(a.timestamp).toLocaleString()}
-            {a.proof_image && (
-              <div>
-                <button style={{...btn,marginTop:5,background:"#22c55e"}}
-                  onClick={()=>window.open(`https://major-project-9.onrender.com${a.proof_image}`)}>
-                  View Proof
-                </button>
-              </div>
-            )}
-          </td>
+  {new Date(a.timestamp).toLocaleString()}
+
+  {a.proof_image && (
+    <div>
+      <button
+        style={{...btn, marginTop:5, background:"#22c55e"}}
+        onClick={() => window.open(`http://127.0.0.1:8000${a.proof_image}`)}
+      >
+        View Proof
+      </button>
+    </div>
+  )}
+</td>
           {resolveAlert &&
             <td style={td}>
-              <button style={btn} onClick={()=>resolveAlert(a)}>Resolve</button>
-            </td>
-          }
+              <button
+                style={btn}
+                onClick={()=>resolveAlert(a)}>
+                  
+                Resolve
+              </button>
+            </td>}
         </tr>
       ))}
       </tbody>
     </table>
-  );
+  )
 }
 
-const page={padding:30,background:"#0b1f3a",minHeight:"100vh",color:"white"};
-const statsContainer={display:"flex",gap:20,marginTop:20,flexWrap:"wrap",alignItems:"center"};
-const card={background:"#142c4c",padding:20,borderRadius:10,width:180,boxShadow:"0 4px 12px rgba(0,0,0,0.4)"};
-const number={fontSize:28,fontWeight:"bold",marginTop:10};
-const exportBtn={padding:"10px 18px",background:"#22c55e",border:"none",color:"white",borderRadius:8,cursor:"pointer",height:45};
-const table={width:"100%",marginTop:15,borderCollapse:"collapse",background:"#142c4c"};
-const th={padding:"14px",borderBottom:"1px solid #2d4c73",background:"#1f3a5f"};
-const td={padding:"12px",color:"#e2e8f0"};
-const btn={padding:"6px 14px",background:"#2563eb",border:"none",color:"white",borderRadius:6};
-const navigateBtn={marginTop:6,padding:"4px 10px",background:"#16a34a",border:"none",color:"white",borderRadius:6,fontSize:12};
-const viewBtn={marginLeft:6,padding:"4px 10px",background:"#f97316",border:"none",color:"white",borderRadius:6,fontSize:12};
-const blinkingRow={animation:"blink 1s infinite",background:"#7f1d1d"};
-const criticalBlinkRow={animation:"blinkCritical 0.5s infinite",background:"#450a0a"};
+/* STYLES */
+
+const page={
+  padding:30,
+  background:"#0b1f3a",
+  minHeight:"100vh",
+  color:"white"
+}
+
+const statsContainer={
+  display:"flex",
+  gap:20,
+  marginTop:20,
+  flexWrap:"wrap",
+  alignItems:"center"
+}
+
+const card={
+  background:"#142c4c",
+  padding:20,
+  borderRadius:10,
+  width:180,
+  boxShadow:"0 4px 12px rgba(0,0,0,0.4)"
+}
+
+const number={
+  fontSize:28,
+  fontWeight:"bold",
+  marginTop:10
+}
+
+const exportBtn={
+  padding:"10px 18px",
+  background:"#22c55e",
+  border:"none",
+  color:"white",
+  borderRadius:8,
+  cursor:"pointer",
+  height:45
+}
+
+const table={
+  width:"100%",
+  marginTop:15,
+  borderCollapse:"collapse",
+  background:"#142c4c"
+}
+
+const th={
+  padding:"14px",
+  borderBottom:"1px solid #2d4c73",
+  background:"#1f3a5f"
+}
+
+const td={
+  padding:"12px",
+  color:"#e2e8f0"
+}
+
+const btn={
+  padding:"6px 14px",
+  background:"#2563eb",
+  border:"none",
+  color:"white",
+  borderRadius:6
+}
+
+const navigateBtn={
+  marginTop:6,
+  padding:"4px 10px",
+  background:"#16a34a",
+  border:"none",
+  color:"white",
+  borderRadius:6,
+  fontSize:12
+}
+
+const viewBtn={
+  marginLeft:6,
+  padding:"4px 10px",
+  background:"#f97316",
+  border:"none",
+  color:"white",
+  borderRadius:6,
+  fontSize:12
+}
+
+const blinkingRow={
+  animation:"blink 1s infinite",
+  background:"#7f1d1d"
+}
 
 const styleSheet=document.styleSheets[0];
-styleSheet.insertRule(`@keyframes blink{0%{background-color:#7f1d1d;}50%{background-color:#dc2626;}100%{background-color:#7f1d1d;}}`,styleSheet.cssRules.length);
-styleSheet.insertRule(`@keyframes blinkCritical{0%{background-color:#450a0a;}50%{background-color:#ef4444;}100%{background-color:#450a0a;}}`,styleSheet.cssRules.length);
+
+styleSheet.insertRule(`
+@keyframes blink{
+0%{background-color:#7f1d1d;}
+50%{background-color:#dc2626;}
+100%{background-color:#7f1d1d;}
+}
+`,styleSheet.cssRules.length);
