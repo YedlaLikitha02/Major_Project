@@ -19,13 +19,13 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         return
 
 
-# ================= SEND ALERT API (FIXED) =================
+# ================= SEND ALERT API =================
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 def send_alert(request):
 
-    print("📥 DATA RECEIVED:", request.data)   # DEBUG
+    print("📥 DATA RECEIVED:", request.data)
 
     serializer = AlertSerializer(data=request.data)
 
@@ -34,8 +34,17 @@ def send_alert(request):
 
         emergency = (alert.emergency_type or "general").lower()
 
-        # Smart routing
-        if emergency == "medical":
+        # ✅ NEW SOS ROUTING LOGIC
+        if emergency == "sos_single":
+            # Single tap → Admin + Police
+            alert.route_info = "SOS (Single Tap): Admin and Police notified"
+
+        elif emergency == "sos_double":
+            # Double tap → Admin + Police + Hospital
+            alert.route_info = "SOS (Double Tap): Admin, Police and Hospital notified"
+
+        # Legacy routing kept for backward compatibility
+        elif emergency == "medical":
             alert.route_info = "Hospital and ambulance notified"
 
         elif emergency in ["attack", "robbery"]:
@@ -62,7 +71,7 @@ def send_alert(request):
         })
 
     else:
-        print("❌ SERIALIZER ERRORS:", serializer.errors)  # 🔥 VERY IMPORTANT
+        print("❌ SERIALIZER ERRORS:", serializer.errors)
         return Response({
             "status": "error",
             "errors": serializer.errors
@@ -72,8 +81,9 @@ def send_alert(request):
 # ================= POLICE DASHBOARD =================
 @login_required
 def police_dashboard(request):
+    # ✅ Shows sos_single, sos_double, plus legacy types
     alerts = Alert.objects.filter(
-        emergency_type__in=["attack", "robbery", "accident"]
+        emergency_type__in=["attack", "robbery", "accident", "sos_single", "sos_double"]
     ).order_by("-timestamp")
 
     return render(request, "police_dashboard.html", {"alerts": alerts})
@@ -82,8 +92,9 @@ def police_dashboard(request):
 # ================= HOSPITAL DASHBOARD =================
 @login_required
 def hospital_dashboard(request):
+    # ✅ Shows only sos_double (double tap) + legacy medical/accident
     alerts = Alert.objects.filter(
-        emergency_type__in=["medical", "accident"]
+        emergency_type__in=["medical", "accident", "sos_double"]
     ).order_by("-timestamp")
 
     return render(request, "hospital_dashboard.html", {"alerts": alerts})
@@ -120,11 +131,13 @@ def home(request):
     return render(request, "home.html")
 
 
-# ================= APIs =================
+# ================= APIs FOR REACT FRONTEND =================
+
 @api_view(['GET'])
 def police_alerts_api(request):
+    # ✅ Police sees: sos_single, sos_double, and legacy types
     alerts = Alert.objects.filter(
-        emergency_type__in=["attack", "robbery", "accident"]
+        emergency_type__in=["attack", "robbery", "accident", "sos_single", "sos_double"]
     ).order_by("-timestamp")
 
     serializer = AlertSerializer(alerts, many=True)
@@ -133,8 +146,9 @@ def police_alerts_api(request):
 
 @api_view(['GET'])
 def hospital_alerts_api(request):
+    # ✅ Hospital sees: only sos_double + legacy medical/accident
     alerts = Alert.objects.filter(
-        emergency_type__in=["medical", "accident"]
+        emergency_type__in=["medical", "accident", "sos_double"]
     ).order_by("-timestamp")
 
     serializer = AlertSerializer(alerts, many=True)
@@ -143,6 +157,7 @@ def hospital_alerts_api(request):
 
 @api_view(['GET'])
 def admin_alerts_api(request):
+    # Admin sees everything
     alerts = Alert.objects.all().order_by("-timestamp")
     serializer = AlertSerializer(alerts, many=True)
     return Response(serializer.data)
